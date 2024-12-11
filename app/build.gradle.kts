@@ -3,16 +3,17 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.jetpackcompose"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.jetpackcompose"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -41,9 +42,19 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("androidx.compose.runtime:runtime-livedata:1.0.5")
+
+    implementation("com.google.android.gms:play-services-auth:21.0.0")
+    val credentialManagerVersion = "1.5.0-alpha05"
+    implementation("androidx.credentials:credentials:$credentialManagerVersion")
+    implementation("androidx.credentials:credentials-play-services-auth:$credentialManagerVersion")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

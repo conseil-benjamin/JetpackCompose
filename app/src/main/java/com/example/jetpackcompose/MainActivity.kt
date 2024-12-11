@@ -1,8 +1,9 @@
 package com.example.jetpackcompose
 
-import android.R
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,7 +20,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -40,7 +48,22 @@ import com.example.jetpackcompose.data.model.User
 import com.example.jetpackcompose.data.repository.UserRepository
 import com.example.jetpackcompose.ui.viewmodel.UserViewModel
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
 import com.example.jetpackcompose.ui.viewmodel.CartViewModel
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.Firebase
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.auth
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import java.security.MessageDigest
+import java.util.UUID
 
 
 class MainActivity : ComponentActivity() {
@@ -100,7 +123,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
             color = Color.White,
         )
         for (i in 1..10){
-            Image(painter = painterResource(id = R.drawable.ic_delete),
+            Image(painter = painterResource(id = R.drawable.ic_launcher_background),
                 contentDescription = null,
                 modifier = Modifier
                     .background(Color.Black)
@@ -242,4 +265,183 @@ fun GreetingPreview() {
     JetpackComposeTheme {
         Greeting("Android")
     }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+fun LoginPreview() {
+    JetpackComposeTheme {
+        LoginScreen()
+    }
+}
+
+@Composable
+fun LoginScreen (modifier: Modifier = Modifier) {
+
+    val password = remember { mutableStateOf("") }
+    val email = remember { mutableStateOf("") }
+
+    Column (modifier = modifier
+        .fillMaxSize()
+        .background(Color.White)
+        .padding(20.dp)
+        ,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        Text(
+            text = "Sign-in",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge
+        )
+        Text(
+            text = "Please fill the form to continue",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        OutlinedTextField(
+            value = email.value,
+            onValueChange = { email.value = it },
+            placeholder = {
+                Text(
+                    text = "Email"
+                )
+            },
+            leadingIcon = {
+                Icon(imageVector = Icons.Rounded.Email, contentDescription = null)
+            },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedTextField(
+            value = password.value,
+            onValueChange = { password.value = it },
+            placeholder = {
+                Text(
+                    text = "Password"
+                )
+            },
+            leadingIcon = {
+                Icon(imageVector = Icons.Rounded.Lock, contentDescription = null)
+            },
+            visualTransformation = PasswordVisualTransformation(),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Button(
+            onClick = { /*TODO*/ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .fillMaxWidth()
+        ) {
+            Text(text = "Sign-in",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+    }
+}
+
+class AuthenticationManager(val context: Context) {
+    private val auth = Firebase.auth
+
+    fun createAccountWithEmail(email: String, password: String): Flow<AuthResponse> = callbackFlow {
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    trySend(AuthResponse.Success)
+                } else {
+                    trySend(AuthResponse.Error(message = task.exception?.message ?: ""))
+                }
+            }
+        awaitClose()
+    }
+
+    fun loginWithEmail(email: String, password: String): Flow<AuthResponse> = callbackFlow {
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    trySend(AuthResponse.Success)
+                } else {
+                    trySend(AuthResponse.Error(message = task.exception?.message ?: ""))
+                }
+            }
+        awaitClose()
+    }
+
+    private fun createNonce(): String {
+        val rawNonce = UUID.randomUUID().toString()
+        val bytes = rawNonce.toByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+
+        return digest.fold("") { str, it ->
+            str + "%02x".format(it)
+        }
+    }
+
+    fun signInWithGoogle(): Flow<AuthResponse> = callbackFlow {
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(context.getString(R.string.web_client_id))
+            .setAutoSelectEnabled(false)
+            .setNonce(createNonce())
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        try {
+            val credentialManager = CredentialManager.create(context)
+            val result = credentialManager.getCredential(
+                context = context,
+                request = request
+            )
+
+            val credential = result.credential
+            if (credential is CustomCredential) {
+                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL){
+                    try {
+                        val googleIdTokenCredential = GoogleIdTokenCredential
+                            .createFrom(credential.data)
+
+                        val firebaseCredential = GoogleAuthProvider
+                            .getCredential(
+                                googleIdTokenCredential.idToken,
+                                null
+                            )
+
+                        auth.signInWithCredential(firebaseCredential)
+                            .addOnCompleteListener {
+                                if (it.isSuccessful) {
+                                    trySend(AuthResponse.Success)
+                                } else {
+                                    trySend(AuthResponse.Error(message = it.exception?.message ?: ""))
+                                }
+                            }
+
+                    } catch (e: Exception) {
+                        trySend(AuthResponse.Error(message = e.message ?: ""))
+                    }
+                }
+            }
+        } catch (e: Exception){
+            trySend(AuthResponse.Error(message = e.message ?: ""))
+        }
+        awaitClose()
+    }
+}
+
+interface AuthResponse {
+    data object Success: AuthResponse
+    data class Error(val message: String): AuthResponse
 }
