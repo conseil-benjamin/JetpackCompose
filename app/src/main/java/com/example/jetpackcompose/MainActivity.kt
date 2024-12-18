@@ -7,10 +7,13 @@ import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,9 +30,11 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -48,6 +53,9 @@ import com.example.jetpackcompose.data.model.User
 import com.example.jetpackcompose.data.repository.UserRepository
 import com.example.jetpackcompose.ui.viewmodel.UserViewModel
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.credentials.CredentialManager
@@ -57,11 +65,14 @@ import com.example.jetpackcompose.ui.viewmodel.CartViewModel
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -69,6 +80,8 @@ import java.util.UUID
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseApp.initializeApp(this)
+
         enableEdgeToEdge()
         setContent {
             JetpackComposeTheme {
@@ -82,11 +95,13 @@ class MainActivity : ComponentActivity() {
 fun AppNavigator() {
     // Création du navController
     val navController = rememberNavController()
-    NavHost(navController, startDestination = "list") {
+    NavHost(navController, startDestination = "login") {
         composable("counter") { CounterScreen(navController) }
         composable("details") { DetailsScreen(navController) }
         composable("list") { ListUser(navController = navController) }
         composable("cart") { ListCart(navController = navController, id = 1) }
+        composable("login") { LoginScreen(navController) }
+        composable("profil") { Profil(navController) }
     }
 }
 
@@ -272,25 +287,27 @@ fun GreetingPreview() {
 @Composable
 fun LoginPreview() {
     JetpackComposeTheme {
-        LoginScreen()
+        LoginScreen(navController = rememberNavController() )
     }
 }
 
 @Composable
-fun LoginScreen (modifier: Modifier = Modifier) {
+fun LoginScreen(navController: NavHostController, modifier: Modifier = Modifier) {
+    var password by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
 
-    val password = remember { mutableStateOf("") }
-    val email = remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val authenticationManager = remember { AuthenticationManager(context = context) }
 
-    Column (modifier = modifier
-        .fillMaxSize()
-        .background(Color.White)
-        .padding(20.dp)
-        ,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(20.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         Text(
             text = "Sign-in",
             fontWeight = FontWeight.Bold,
@@ -302,12 +319,10 @@ fun LoginScreen (modifier: Modifier = Modifier) {
         )
 
         OutlinedTextField(
-            value = email.value,
-            onValueChange = { email.value = it },
+            value = email,
+            onValueChange = { email = it },
             placeholder = {
-                Text(
-                    text = "Email"
-                )
+                Text(text = "Email")
             },
             leadingIcon = {
                 Icon(imageVector = Icons.Rounded.Email, contentDescription = null)
@@ -319,12 +334,10 @@ fun LoginScreen (modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = password.value,
-            onValueChange = { password.value = it },
+            value = password,
+            onValueChange = { password = it },
             placeholder = {
-                Text(
-                    text = "Password"
-                )
+                Text(text = "Password")
             },
             leadingIcon = {
                 Icon(imageVector = Icons.Rounded.Lock, contentDescription = null)
@@ -335,17 +348,67 @@ fun LoginScreen (modifier: Modifier = Modifier) {
         )
 
         Button(
-            onClick = { /*TODO*/ },
+            onClick = {
+                val trimmedEmail = email.trim()
+                authenticationManager.createAccountWithEmail(password, trimmedEmail)
+                    .onEach { response ->
+                        if (response is AuthResponse.Success) {
+                            println("Success")
+                        } else {
+                            println("Error")
+                            println(trimmedEmail)
+                            println(password)
+                        }
+                    }
+                    .launchIn(coroutineScope)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 10.dp)
                 .fillMaxWidth()
         ) {
-            Text(text = "Sign-in",
+            Text(
+                text = "Sign-in",
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Or",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        OutlinedIconButton(onClick = {
+            authenticationManager.signInWithGoogle(navController)
+                .onEach { response ->
+                    if (response is AuthResponse.Success) {
+                        println("Success")
+                    } else {
+                        println("Error")
+                        Log.i("logGoogle", "error")
+                    }
+                }
+                .launchIn(coroutineScope)
+        },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+                .height(56.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.google),
+                contentDescription = null,
+            )
+            Text(text = "Sign-in with Google")
         }
     }
 }
@@ -353,8 +416,8 @@ fun LoginScreen (modifier: Modifier = Modifier) {
 class AuthenticationManager(val context: Context) {
     private val auth = Firebase.auth
 
-    fun createAccountWithEmail(email: String, password: String): Flow<AuthResponse> = callbackFlow {
-        auth.createUserWithEmailAndPassword(email, password)
+    fun createAccountWithEmail(password: String, email: String): Flow<AuthResponse> = callbackFlow {
+        auth.createUserWithEmailAndPassword(password, email)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     trySend(AuthResponse.Success)
@@ -365,7 +428,7 @@ class AuthenticationManager(val context: Context) {
         awaitClose()
     }
 
-    fun loginWithEmail(email: String, password: String): Flow<AuthResponse> = callbackFlow {
+    fun loginWithEmail(password: String, email: String): Flow<AuthResponse> = callbackFlow {
         auth.signInWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -388,7 +451,31 @@ class AuthenticationManager(val context: Context) {
         }
     }
 
-    fun signInWithGoogle(): Flow<AuthResponse> = callbackFlow {
+    // TODO : finir de rediriger vers le composant profil après la connexion
+    fun saveUserData (context: Context, navController: NavHostController){
+        val user = auth.currentUser
+        user?.let {
+            val displayName = it.displayName
+            val email = it.email
+            val photoUrl = it.photoUrl
+            val uid = it.uid
+
+            // Afficher les informations de l'utilisateur
+            Log.d("User Info", "Display Name: $displayName")
+            Log.d("User Info", "Email: $email")
+            Log.d("User Info", "Photo URL: $photoUrl")
+            Log.d("User Info", "UID: $uid")
+        }
+        context.getSharedPreferences("user", Context.MODE_PRIVATE).edit().apply {
+            putString("displayName", user?.displayName)
+            putString("email", user?.email)
+            putString("photoUrl", user?.photoUrl.toString())
+            putString("uid", user?.uid)
+        }.apply()
+        navController.navigate("profil")
+    }
+
+    fun signInWithGoogle(navController: NavHostController): Flow<AuthResponse> = callbackFlow {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(context.getString(R.string.web_client_id))
@@ -408,8 +495,9 @@ class AuthenticationManager(val context: Context) {
             )
 
             val credential = result.credential
+            Log.i("logGoogle2", credential.toString())
             if (credential is CustomCredential) {
-                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL){
+                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     try {
                         val googleIdTokenCredential = GoogleIdTokenCredential
                             .createFrom(credential.data)
@@ -424,6 +512,7 @@ class AuthenticationManager(val context: Context) {
                             .addOnCompleteListener {
                                 if (it.isSuccessful) {
                                     trySend(AuthResponse.Success)
+                                    saveUserData(context, navController)
                                 } else {
                                     trySend(AuthResponse.Error(message = it.exception?.message ?: ""))
                                 }
@@ -433,9 +522,13 @@ class AuthenticationManager(val context: Context) {
                         trySend(AuthResponse.Error(message = e.message ?: ""))
                     }
                 }
+            } else {
+                Log.i("logGoogle", "No credentials available")
+                trySend(AuthResponse.Error(message = "No credentials available"))
             }
-        } catch (e: Exception){
+        } catch (e: Exception) {
             trySend(AuthResponse.Error(message = e.message ?: ""))
+            Log.i("logGoogle", e.message ?: "")
         }
         awaitClose()
     }
