@@ -50,11 +50,14 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.0.5")
 
     implementation("com.google.android.gms:play-services-auth:21.0.0")
+    implementation(libs.firebase.firestore)
     val credentialManagerVersion = "1.5.0-alpha05"
     implementation("androidx.credentials:credentials:$credentialManagerVersion")
     implementation("androidx.credentials:credentials-play-services-auth:$credentialManagerVersion")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
+
+    implementation("io.coil-kt:coil-compose:2.1.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

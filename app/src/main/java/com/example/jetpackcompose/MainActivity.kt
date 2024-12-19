@@ -1,16 +1,14 @@
 package com.example.jetpackcompose
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
-import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,8 +47,6 @@ import com.example.jetpackcompose.ui.theme.JetpackComposeTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.jetpackcompose.data.model.User
-import com.example.jetpackcompose.data.repository.UserRepository
 import com.example.jetpackcompose.ui.viewmodel.UserViewModel
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +57,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import com.example.jetpackcompose.ui.components.Profile
+import com.example.jetpackcompose.ui.screens.dream.DreamScreen
+import com.example.jetpackcompose.ui.screens.dreams.DreamListScreen
 import com.example.jetpackcompose.ui.viewmodel.CartViewModel
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -75,7 +76,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import java.security.MessageDigest
 import java.util.UUID
-
+import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,15 +94,33 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigator() {
+    val context = LocalContext.current
+    val isLoggedIn = context.getSharedPreferences("isLoggedIn", Context.MODE_PRIVATE)
+    var screenStart = ""
+
+    if (isLoggedIn.getBoolean("isLoggedIn", false)) {
+        screenStart = "profile"
+    } else {
+        screenStart = "login"
+    }
+
     // Création du navController
     val navController = rememberNavController()
-    NavHost(navController, startDestination = "login") {
+    NavHost(navController, startDestination = screenStart) {
         composable("counter") { CounterScreen(navController) }
         composable("details") { DetailsScreen(navController) }
         composable("list") { ListUser(navController = navController) }
         composable("cart") { ListCart(navController = navController, id = 1) }
         composable("login") { LoginScreen(navController) }
-        composable("profil") { Profil(navController) }
+        composable("profile") { Profile(navController) }
+        composable("DreamList") { DreamListScreen(viewModel = viewModel(),navController) }
+        composable(
+            route = "Dream/{dreamId}",
+            arguments = listOf(navArgument("dreamId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val dreamId = backStackEntry.arguments?.getString("dreamId") ?: ""
+            DreamScreen(dreamId = dreamId, navController = navController)
+        }
     }
 }
 
@@ -452,6 +471,7 @@ class AuthenticationManager(val context: Context) {
     }
 
     // TODO : finir de rediriger vers le composant profil après la connexion
+    @SuppressLint("CommitPrefEdits")
     fun saveUserData (context: Context, navController: NavHostController){
         val user = auth.currentUser
         user?.let {
@@ -466,13 +486,20 @@ class AuthenticationManager(val context: Context) {
             Log.d("User Info", "Photo URL: $photoUrl")
             Log.d("User Info", "UID: $uid")
         }
-        context.getSharedPreferences("user", Context.MODE_PRIVATE).edit().apply {
-            putString("displayName", user?.displayName)
-            putString("email", user?.email)
-            putString("photoUrl", user?.photoUrl.toString())
-            putString("uid", user?.uid)
-        }.apply()
-        navController.navigate("profil")
+        val editor = context.getSharedPreferences("user", Context.MODE_PRIVATE).edit()
+        editor.putString("displayName", user?.displayName)
+        editor.putString("email", user?.email)
+        editor.putString("photoUrl", user?.photoUrl.toString())
+        editor.putString("uid", user?.uid)
+        editor.apply()
+
+        val editor2 = context.getSharedPreferences("isLoggedIn", Context.MODE_PRIVATE).edit()
+        editor2.putBoolean("isLoggedIn", true)
+        editor2.apply()
+
+        navController.navigate("profile") {
+            popUpTo("login") { inclusive = true }
+        }
     }
 
     fun signInWithGoogle(navController: NavHostController): Flow<AuthResponse> = callbackFlow {
