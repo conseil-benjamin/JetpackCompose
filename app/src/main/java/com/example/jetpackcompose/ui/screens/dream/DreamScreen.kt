@@ -22,7 +22,7 @@ import com.example.jetpackcompose.viewmodel.DreamsViewModel
 fun DreamScreen (viewModel: DreamsViewModel = viewModel(), navController: NavHostController, dreamId : String){
     val dream by viewModel.dream.collectAsStateWithLifecycle()
 
-    LaunchedEffect(dreamId) {
+    LaunchedEffect(dreamId) { // equivalent à un useEffect en React
         viewModel.getDreamById(dreamId)
     }
 

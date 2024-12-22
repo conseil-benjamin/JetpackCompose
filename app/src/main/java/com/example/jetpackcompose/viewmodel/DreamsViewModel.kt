@@ -1,16 +1,15 @@
 package com.example.jetpackcompose.viewmodel
 
 import android.util.Log
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.lifecycle.ViewModel
 import com.example.jetpackcompose.data.model.Dream
-import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.firestore
-import com.google.firebase.firestore.toObjects
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.viewModelScope
+import com.example.jetpackcompose.utils.SnackbarManager
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class DreamsViewModel : ViewModel() {
     private var _dreamsList = MutableStateFlow<List<Dream>>(emptyList())
@@ -19,32 +18,37 @@ class DreamsViewModel : ViewModel() {
     private var _dream = MutableStateFlow<Dream?>(null)
     var dream = _dream.asStateFlow()
 
-
-    init {
+    suspend fun init() {
         getDreams()
     }
 
-    fun getDreams() {
+    fun getDreams(): Boolean {
         val db = FirebaseFirestore.getInstance()
 
-        db.collection("dreams")
-            .addSnapshotListener { snapshots, exception ->
-                if (exception != null) {
-                    println("Error getting documents: $exception")
-                    return@addSnapshotListener
-                }
+        return try {
+            db.collection("dreams")
+                .addSnapshotListener { snapshots, exception ->
+                    if (exception != null) {
+                        println("Error getting documents: $exception")
+                        return@addSnapshotListener
+                    }
 
-                if (snapshots != null) {
-                    val dreams = snapshots.map { document ->
-                        // Convertir chaque document en un objet Dream
-                        val dream = document.toObject(Dream::class.java)
-                        dream.copy(id = document.id)  // Ajout de l'ID du document à l'objet Dream
-                    }.filterNotNull()  // Évitez les éléments nulls
+                    if (snapshots != null) {
+                        val dreams = snapshots.map { document ->
+                            // Convertir chaque document en un objet Dream
+                            val dream = document.toObject(Dream::class.java)
+                            dream.copy(id = document.id)  // Ajout de l'ID du document à l'objet Dream
+                        }.filterNotNull()  // Évitez les éléments nulls
 
-                    _dreamsList.value = dreams
-                    Log.i("dreams", dreams.toString())
+                        _dreamsList.value = dreams
+                        Log.i("dreams", dreams.toString())
+                    }
                 }
-            }
+            true
+        } catch (e: Exception) {
+            println("Erreur lors de l'ajout du rêve : $e")
+            false
+        }
     }
 
     fun getDreamById(idDocument: String) {
@@ -66,7 +70,7 @@ class DreamsViewModel : ViewModel() {
             }
     }
 
-    fun addDream(title: String, content: String, date: String) {
+    suspend fun addDream(title: String, content: String, date: String): Boolean {
         val db = FirebaseFirestore.getInstance()
 
         val dreamToAdd = Dream(
@@ -75,14 +79,43 @@ class DreamsViewModel : ViewModel() {
             date = date
         )
 
-        db.collection("dreams")
-            .add(dreamToAdd)
-            .addOnSuccessListener { documentReference ->
-                println("Le rêve a été ajouté avec l'ID : ${documentReference.id}")
+        return try {
+            db.collection("dreams")
+                .add(dreamToAdd)
+                .await() // Attend que l'opération se termine
+            println("Le rêve a été ajouté avec succès.")
+            true
+        } catch (e: Exception) {
+            println("Erreur lors de l'ajout du rêve : $e")
+            false
+        }
+    }
+
+    fun addDreamAndShowSnackbar(title: String, content: String, date: String) {
+        viewModelScope.launch {
+            val isAdded = addDream(title, content, date)
+            if (isAdded) {
+                SnackbarManager.showMessage("Rêve ajouté avec succès.")
+            } else {
+                SnackbarManager.showMessage("Erreur lors de l'ajout du rêve.")
             }
-            .addOnFailureListener { e ->
-                println("Erreur lors de l'ajout du rêve : $e")
+        }
+    }
+
+    fun getDreamsAndShowSnackbar() {
+        viewModelScope.launch {
+            val getDreams = getDreams()
+            Log.i("getDreams", getDreams.toString())
+            if (getDreams) {
+                SnackbarManager.showMessage("Rêves récupérés avec succès.")
+            } else {
+                SnackbarManager.showMessage("Erreur lors de la récupération des rêves.")
             }
+        }
+    }
+
+    fun updateDream () {
+        // TODO : faire une dialogue pour get les infos du rêve à modifier et update les changements
     }
 
 }

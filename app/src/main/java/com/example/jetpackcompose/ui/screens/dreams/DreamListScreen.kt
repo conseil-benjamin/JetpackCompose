@@ -18,6 +18,8 @@ package com.example.jetpackcompose.ui.screens.dreams
     import androidx.compose.runtime.getValue
     import androidx.compose.foundation.lazy.items
     import androidx.compose.material3.Button
+    import androidx.compose.material3.SnackbarHost
+    import androidx.compose.material3.SnackbarHostState
     import androidx.compose.runtime.mutableStateOf
     import androidx.compose.runtime.remember
     import androidx.compose.ui.text.font.FontWeight
@@ -25,13 +27,28 @@ package com.example.jetpackcompose.ui.screens.dreams
     import androidx.navigation.NavHostController
     import com.example.jetpackcompose.ui.components.DialogCreateDream
     import androidx.compose.runtime.*
+    import com.example.jetpackcompose.utils.SnackbarManager
 
-@Composable
+    @Composable
     fun DreamListScreen(viewModel: DreamsViewModel = viewModel(), navController: NavHostController) {
         val dreams by viewModel.dreamList.collectAsStateWithLifecycle()
         var showDialog by remember { mutableStateOf(false) }
 
-        Scaffold { paddingValues ->
+        val snackbarHostState = remember { SnackbarHostState() }
+
+        // Ecoute des messages du SnackbarManager
+        LaunchedEffect(Unit) { // unit veut dire que l'effet sera lancé une seule fois
+            SnackbarManager.snackbarMessages.collect { snackbarMessage ->
+                snackbarHostState.showSnackbar(
+                    message = snackbarMessage.message,
+                    actionLabel = snackbarMessage.actionLabel
+                )
+            }
+        }
+
+        Scaffold (
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ){ paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
                 LazyColumn(
                     contentPadding = PaddingValues(20.dp),
@@ -80,7 +97,7 @@ package com.example.jetpackcompose.ui.screens.dreams
                                 onDismiss = { showDialog = false },
                                 onConfirm = {
                                         title, content, date ->
-                                    viewModel.addDream(title, content, date)
+                                    viewModel.addDreamAndShowSnackbar(title, content, date)
                                     showDialog = false
                                 }
                             )
@@ -91,7 +108,7 @@ package com.example.jetpackcompose.ui.screens.dreams
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    onClick = { viewModel.getDreams() }
+                    onClick = { viewModel.getDreamsAndShowSnackbar() }
                 ) {
                     Text(text = "Rafraichir")
                 }
